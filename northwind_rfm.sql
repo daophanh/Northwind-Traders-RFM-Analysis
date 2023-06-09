@@ -176,3 +176,39 @@ SELECT *
             WHEN f_rank > 0.25 THEN 2
             ELSE 1 END AS f_tier
 FROM rank_table;
+
+-- Testing monetary
+WITH fact_table AS (
+    SELECT ord.orderID
+        , ord.customerID
+        , ord.orderDate
+        , details.productID
+        , details.unitPrice
+        , details.quantity
+        , details.discount
+        , cus.companyName
+        , cus.city
+        , cus.country
+    FROM [dbo].[orders] AS ord
+    LEFT JOIN [dbo].[order_details] AS details
+        ON ord.orderID = details.orderID
+    LEFT JOIN [dbo].[customers] AS cus
+        ON ord.customerID = cus.customerID
+) -- Step 2: calculate Recency, Frequency, Monetary
+, rfm_table AS ( 
+SELECT customerID
+    , ROUND(SUM(unitPrice * quantity * (1-discount) * 0.1),2) AS monetary -- Monetary can be calculated as the sum of the Amount of all orders by each customer.
+FROM fact_table
+GROUP BY customerID
+) -- Step 3: Ranking r, f, m, values (from 0 to 1)
+, rank_table AS (
+SELECT *
+    , PERCENT_RANK() OVER (ORDER BY monetary DESC) AS m_rank  
+FROM rfm_table
+) -- Step 4: Categorise into 4 tiers 
+SELECT *
+    , CASE  WHEN m_rank > 0.75 THEN 4
+            WHEN m_rank > 0.5 THEN 3
+            WHEN m_rank > 0.25 THEN 2
+            ELSE 1 END AS m_tier
+FROM rank_table
